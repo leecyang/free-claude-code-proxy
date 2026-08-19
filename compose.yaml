@@ -6,11 +6,18 @@ services:
     image: free-claude-code-proxy:local
     restart: unless-stopped
     ports:
-      - "8082:8082"
-    env_file:
-      - .env
+      - "127.0.0.1:8082:8082"
+    environment:
+      FCC_ENV_FILE: /run/fcc/bootstrap.env
+      FCC_ADMIN_TRUSTED_CLIENT_IPS: 172.30.0.1
     volumes:
       - fcc-data:/home/fcc/.fcc
+      - type: bind
+        source: ./.env
+        target: /run/fcc/bootstrap.env
+        read_only: true
+    networks:
+      - fcc-local
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8082/health', timeout=3).status == 200 else 1)"]
       interval: 30s
@@ -20,3 +27,10 @@ services:
 
 volumes:
   fcc-data:
+
+networks:
+  fcc-local:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          gateway: 172.30.0.1

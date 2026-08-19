@@ -459,10 +459,13 @@ cp .env.production.example .env
 docker compose up -d --build
 ```
 
-The container exposes `8082` for both the `/v1/*` API and the Admin UI
-(`http://localhost:8082/admin`), and a `GET /health` healthcheck. Managed
-config and logs persist in the `fcc-data` volume (`/home/fcc/.fcc` in the
-container), so Admin UI edits survive restarts.
+The container binds `8082` to the host loopback interface for both the `/v1/*`
+API and the Admin UI (`http://localhost:8082/admin`), and provides a `GET
+/health` healthcheck. On first start, `.env` is imported as a read-only bootstrap
+file into FCC's managed config. It is not injected as process-owned environment,
+so its settings remain editable in Admin. Managed config and logs persist in the
+`fcc-data` volume (`/home/fcc/.fcc` in the container), so Admin UI edits survive
+restarts. Later edits to the host `.env` do not overwrite managed settings.
 
 Point your agent at the aggregated gateway:
 
@@ -503,8 +506,10 @@ Both `PROVIDER_API_KEYS` and `PUBLIC_API_KEYS`/`ANTHROPIC_AUTH_TOKEN` are also
 editable from the Admin UI (**Providers** and **Runtime** sections); secret
 values are masked in the UI.
 
-A reverse proxy (Caddy, Nginx) for TLS termination is optional and not
-included here — put FCC behind one if you expose it beyond localhost.
+The Compose deployment intentionally is not reachable beyond the Docker host.
+If remote agents need the API, put FCC behind a TLS reverse proxy that exposes
+only `/v1/*` and `/health`; keep `/admin*` restricted to localhost or an SSH
+tunnel.
 
 <a id="optional-integrations"></a>
 

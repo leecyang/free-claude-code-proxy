@@ -239,6 +239,19 @@ def test_public_api_keys_default_empty() -> None:
     assert settings.public_api_keys == ()
 
 
+def test_admin_trusted_client_ips_parse_exact_addresses() -> None:
+    settings = Settings.model_validate(
+        {"FCC_ADMIN_TRUSTED_CLIENT_IPS": "172.30.0.1, 2001:db8::1"}
+    )
+
+    assert settings.admin_trusted_client_ips == ("172.30.0.1", "2001:db8::1")
+
+
+def test_admin_trusted_client_ips_reject_non_ip_hosts() -> None:
+    with pytest.raises(ValidationError):
+        Settings.model_validate({"FCC_ADMIN_TRUSTED_CLIENT_IPS": "docker-host"})
+
+
 @pytest.mark.parametrize(
     "value",
     [

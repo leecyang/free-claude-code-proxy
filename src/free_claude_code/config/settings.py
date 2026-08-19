@@ -1,5 +1,6 @@
 """Pure, validated application settings schema."""
 
+import ipaddress
 import json
 from typing import Annotated
 
@@ -731,6 +732,10 @@ class Settings(BaseModel):
     host: NonEmptyString = Field(default="0.0.0.0", validation_alias="HOST")
     port: int = Field(default=8082, validation_alias="PORT")
     open_admin_browser: bool = Field(default=True, validation_alias="FCC_OPEN_BROWSER")
+    admin_trusted_client_ips: CsvKeys = Field(
+        default=(),
+        validation_alias="FCC_ADMIN_TRUSTED_CLIENT_IPS",
+    )
     proxy_auth_enabled: bool = Field(
         default=False,
         validation_alias="PROXY_AUTH_ENABLED",
@@ -763,6 +768,20 @@ class Settings(BaseModel):
         if v == "" or v is None:
             return None
         return v
+
+    @field_validator("admin_trusted_client_ips")
+    @classmethod
+    def validate_admin_trusted_client_ips(
+        cls, value: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        for address in value:
+            try:
+                ipaddress.ip_address(address)
+            except ValueError as exc:
+                raise ValueError(
+                    "FCC_ADMIN_TRUSTED_CLIENT_IPS must contain IP addresses"
+                ) from exc
+        return value
 
     @field_validator("log_level")
     @classmethod

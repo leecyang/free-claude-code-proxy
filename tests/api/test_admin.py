@@ -72,6 +72,36 @@ def test_admin_page_is_loopback_only(monkeypatch, tmp_path):
     assert remote_client.get("/admin").status_code == 403
 
 
+def test_admin_allows_exact_trusted_client_for_local_host(monkeypatch, tmp_path):
+    _set_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("FCC_ADMIN_TRUSTED_CLIENT_IPS", "172.30.0.1")
+    client = TestClient(create_test_app(), client=("172.30.0.1", 50000))
+
+    response = client.get("/admin", headers={"Host": "localhost:8082"})
+
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("client_host", "host", "origin"),
+    (
+        ("172.30.0.2", "localhost:8082", "http://localhost:8082"),
+        ("172.30.0.1", "proxy.example", "http://localhost:8082"),
+        ("172.30.0.1", "localhost:8082", "https://attacker.example"),
+    ),
+)
+def test_admin_rejects_untrusted_docker_request_dimensions(
+    monkeypatch, tmp_path, client_host, host, origin
+):
+    _set_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("FCC_ADMIN_TRUSTED_CLIENT_IPS", "172.30.0.1")
+    client = TestClient(create_test_app(), client=(client_host, 50000))
+
+    response = client.get("/admin", headers={"Host": host, "Origin": origin})
+
+    assert response.status_code == 403
+
+
 @pytest.mark.parametrize(
     "path",
     (
