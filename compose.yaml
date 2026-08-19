@@ -10,6 +10,8 @@ services:
     environment:
       FCC_ENV_FILE: /run/fcc/bootstrap.env
       FCC_ADMIN_TRUSTED_CLIENT_IPS: 172.30.0.1
+      FCC_ADMIN_REMOTE_ENABLED: "${FCC_ADMIN_REMOTE_ENABLED:-false}"
+      FCC_ADMIN_REMOTE_HOST: "${FCC_ADMIN_REMOTE_HOST:-}"
     volumes:
       - fcc-data:/home/fcc/.fcc
       - type: bind
