@@ -233,6 +233,58 @@ def test_model_fallbacks_reject_blank_and_duplicate_members(value: str) -> None:
         Settings.model_validate({"MODEL_FALLBACKS": value})
 
 
+def test_public_api_keys_default_empty() -> None:
+    settings = Settings()
+
+    assert settings.public_api_keys == ()
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "fcc_test_1,fcc_test_2,fcc_test_3",
+        ("fcc_test_1", " fcc_test_2 ", "fcc_test_3"),
+        ["fcc_test_1", "fcc_test_2", "fcc_test_3"],
+    ],
+)
+def test_public_api_keys_parse_and_trim(value: object) -> None:
+    settings = Settings.model_validate({"PUBLIC_API_KEYS": value})
+
+    assert settings.public_api_keys == ("fcc_test_1", "fcc_test_2", "fcc_test_3")
+
+
+def test_provider_api_keys_default_empty() -> None:
+    settings = Settings()
+
+    assert settings.provider_api_keys == {}
+
+
+def test_provider_api_keys_parses_json_object() -> None:
+    settings = Settings.model_validate(
+        {
+            "PROVIDER_API_KEYS": (
+                '{"nvidia_nim": ["nvapi-key-2", " nvapi-key-3 "], '
+                '"groq": ["gsk-key-2"]}'
+            )
+        }
+    )
+
+    assert settings.provider_api_keys == {
+        "nvidia_nim": ("nvapi-key-2", "nvapi-key-3"),
+        "groq": ("gsk-key-2",),
+    }
+
+
+def test_provider_api_keys_rejects_invalid_json() -> None:
+    with pytest.raises(ValidationError):
+        Settings.model_validate({"PROVIDER_API_KEYS": "not json"})
+
+
+def test_provider_api_keys_rejects_unknown_provider_id() -> None:
+    with pytest.raises(ValidationError):
+        Settings.model_validate({"PROVIDER_API_KEYS": '{"not_a_provider": ["k"]}'})
+
+
 @pytest.mark.parametrize(
     "field",
     ["MODEL", "HOST", "WHISPER_MODEL", "LOG_LEVEL", "ANTHROPIC_AUTH_TOKEN"],

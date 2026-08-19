@@ -34,6 +34,7 @@ class _ModelListingProvider(BaseProvider):
         super().__init__(
             ProviderConfig(
                 api_key="browser-test",
+                api_keys=("browser-test",),
                 base_url="https://provider.invalid/v1",
                 rate_limit=1_000,
                 rate_window=1,

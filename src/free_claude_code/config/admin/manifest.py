@@ -204,6 +204,20 @@ _NON_PROVIDER_FIELDS: tuple[ConfigFieldSpec, ...] = (
         ),
     ),
     ConfigFieldSpec(
+        "PUBLIC_API_KEYS",
+        "Public API Keys",
+        "runtime",
+        "secret",
+        settings_attr="public_api_keys",
+        secret=True,
+        restart_required=True,
+        description=(
+            "Comma-separated additional downstream API keys, e.g. "
+            "fcc_test_1,fcc_test_2. Any one of them, or the API/CLI Auth Token "
+            "above, authenticates a client via Authorization: Bearer <key>."
+        ),
+    ),
+    ConfigFieldSpec(
         "PROVIDER_RATE_LIMIT",
         "Provider Rate Limit",
         "runtime",

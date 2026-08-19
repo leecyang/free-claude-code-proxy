@@ -21,6 +21,7 @@ def _request(
     headers: dict[str, str],
     token: str = "freecc",
     enabled: bool = True,
+    public_api_keys: tuple[str, ...] = (),
 ) -> tuple[Request, Settings]:
     request = Request(
         {
@@ -35,6 +36,7 @@ def _request(
     settings = Settings.model_construct(
         proxy_auth_enabled=enabled,
         proxy_auth_token=token,
+        public_api_keys=public_api_keys,
     )
     return request, settings
 
@@ -202,6 +204,41 @@ def test_require_proxy_auth_rejects_invalid_bearer_when_legacy_header_matches():
     request, settings = _request(
         headers={"authorization": "Bearer wrong", "x-api-key": "secret"},
         token="secret",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_proxy_auth(request, settings)
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Invalid proxy authentication token"
+
+
+@pytest.mark.parametrize("presented", ["fcc_test_1", "fcc_test_2"])
+def test_require_proxy_auth_accepts_any_configured_public_api_key(presented: str):
+    request, settings = _request(
+        headers={"authorization": f"Bearer {presented}"},
+        token="freecc",
+        public_api_keys=("fcc_test_1", "fcc_test_2"),
+    )
+
+    require_proxy_auth(request, settings)
+
+
+def test_require_proxy_auth_still_accepts_retained_token_alongside_public_keys():
+    request, settings = _request(
+        headers={"authorization": "Bearer freecc"},
+        token="freecc",
+        public_api_keys=("fcc_test_1", "fcc_test_2"),
+    )
+
+    require_proxy_auth(request, settings)
+
+
+def test_require_proxy_auth_rejects_key_not_in_public_api_keys():
+    request, settings = _request(
+        headers={"authorization": "Bearer fcc_test_3"},
+        token="freecc",
+        public_api_keys=("fcc_test_1", "fcc_test_2"),
     )
 
     with pytest.raises(HTTPException) as exc_info:

@@ -1,5 +1,6 @@
 """Typed metadata owned by the Admin configuration boundary."""
 
+import json
 from dataclasses import dataclass
 from enum import Enum
 from typing import Literal
@@ -67,6 +68,10 @@ class ConfigFieldSpec:
             return "true" if value else "false"
         if isinstance(value, Enum):
             return str(value.value)
+        if isinstance(value, dict):
+            return json.dumps(value) if value else None
+        if isinstance(value, tuple):
+            return ",".join(str(item) for item in value) if value else None
         return str(value)
 
     @property

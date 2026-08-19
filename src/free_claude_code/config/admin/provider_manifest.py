@@ -297,11 +297,32 @@ def provider_field_specs() -> tuple[ConfigFieldSpec, ...]:
     """Return provider fields generated from the provider catalog."""
 
     return (
+        *_multi_key_field_specs(),
         *_credential_field_specs(),
         *_cloudflare_account_field_specs(),
         *_vertex_field_specs(),
         *_base_url_field_specs(),
         *_proxy_field_specs(),
+    )
+
+
+def _multi_key_field_specs() -> tuple[ConfigFieldSpec, ...]:
+    return (
+        ConfigFieldSpec(
+            key="PROVIDER_API_KEYS",
+            label="Additional Provider API Keys (JSON)",
+            section_id="providers",
+            field_type="textarea",
+            settings_attr="provider_api_keys",
+            secret=True,
+            advanced=True,
+            description=(
+                "Optional extra upstream API keys per provider, used in "
+                "round-robin alongside each provider's single-key field above. "
+                "JSON object mapping provider id to a list of keys, e.g. "
+                '{"nvidia_nim": ["nvapi-key-2"], "groq": ["gsk-key-2"]}.'
+            ),
+        ),
     )
 
 

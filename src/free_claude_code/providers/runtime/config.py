@@ -25,6 +25,24 @@ def provider_credential(
     return None
 
 
+def provider_credentials(
+    descriptor: ProviderDescriptor, settings: Settings, primary: str | None
+) -> tuple[str, ...]:
+    """Return all configured upstream API keys for round-robin, primary first.
+
+    Merges the single-key backward-compatible credential (if set) with any
+    additional keys configured via ``PROVIDER_API_KEYS``. Static credentials
+    (local runtimes) never rotate.
+    """
+    if descriptor.static_credential is not None:
+        return ()
+    keys: list[str] = [primary] if primary else []
+    for key in settings.provider_api_keys.get(descriptor.provider_id, ()):
+        if key not in keys:
+            keys.append(key)
+    return tuple(keys)
+
+
 def has_provider_configuration(
     descriptor: ProviderDescriptor, settings: Settings
 ) -> bool:
@@ -78,6 +96,7 @@ def build_provider_config(
     proxy = string_setting(settings, descriptor.proxy_attr)
     return ProviderConfig(
         api_key=credential,
+        api_keys=provider_credentials(descriptor, settings, credential),
         base_url=resolved_base_url,
         rate_limit=settings.provider_rate_limit,
         rate_window=settings.provider_rate_window,
