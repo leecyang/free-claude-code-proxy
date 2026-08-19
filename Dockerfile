@@ -16,15 +16,13 @@ WORKDIR /app
 # from the Tsinghua TUNA PyPI mirror instead of the URLs embedded in uv.lock.
 # --frozen makes export use the checked-in lockfile without re-resolving it.
 COPY pyproject.toml uv.lock README.md ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv export --frozen --no-group dev --no-emit-project \
+RUN uv export --frozen --no-group dev --no-emit-project \
         --format requirements.txt --output-file /tmp/requirements.txt \
     && uv venv \
     && uv pip sync --require-hashes /tmp/requirements.txt
 
 COPY src ./src
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --no-deps .
+RUN uv pip install --no-deps .
 
 RUN useradd --create-home --uid 1000 fcc \
     && mkdir -p /home/fcc/.fcc \
