@@ -1,7 +1,10 @@
-FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS base
+FROM accel.way2api.fun/ghcr.io/astral-sh/uv:python3.14-trixie-slim AS base
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
+    UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple/ \
+    UV_HTTP_TIMEOUT=60 \
+    UV_HTTP_RETRIES=5 \
     PYTHONUNBUFFERED=1 \
     FCC_OPEN_BROWSER=false \
     HOST=0.0.0.0 \
@@ -9,12 +12,19 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# Install dependencies first so dependency layers cache independently of source changes.
+# Keep dependency versions and hashes from uv.lock, but install the artifacts
+# from the Tsinghua TUNA PyPI mirror instead of the URLs embedded in uv.lock.
+# --frozen makes export use the checked-in lockfile without re-resolving it.
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --locked --no-install-project --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv export --frozen --no-group dev --no-emit-project \
+        --format requirements.txt --output-file /tmp/requirements.txt \
+    && uv venv \
+    && uv pip sync --require-hashes /tmp/requirements.txt
 
 COPY src ./src
-RUN uv sync --locked --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --no-deps .
 
 RUN useradd --create-home --uid 1000 fcc \
     && mkdir -p /home/fcc/.fcc \
