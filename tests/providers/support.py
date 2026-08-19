@@ -32,11 +32,13 @@ def make_provider_config(
     proxy: str | None = None,
     log_raw_sse_events: bool = False,
     log_api_error_tracebacks: bool = False,
+    api_keys: tuple[str, ...] | None = None,
 ) -> ProviderConfig:
     """Build a complete resolved config for isolated provider tests."""
 
     return ProviderConfig(
         api_key=api_key,
+        api_keys=api_keys if api_keys is not None else ((api_key,) if api_key else ()),
         base_url=base_url,
         rate_limit=rate_limit,
         rate_window=rate_window,

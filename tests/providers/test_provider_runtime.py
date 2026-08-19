@@ -60,6 +60,7 @@ from free_claude_code.providers.runtime import (
     build_provider_config,
     create_provider,
 )
+from free_claude_code.providers.runtime.config import provider_credentials
 from free_claude_code.providers.vertex import VertexProvider
 
 
@@ -250,6 +251,95 @@ def test_xai_provider_config_uses_key_base_and_proxy() -> None:
     assert config.base_url == XAI_DEFAULT_BASE
     assert config.proxy == "http://proxy.test:8080"
     assert isinstance(provider, OpenAIChatProvider)
+
+
+def test_provider_credentials_merges_primary_and_extra_keys() -> None:
+    descriptor = PROVIDER_CATALOG["xai"]
+    settings = _make_settings(
+        xai_api_key="xai-token",
+        provider_api_keys={"xai": ("xai-token-2", "xai-token-3")},
+    )
+
+    credentials = provider_credentials(descriptor, settings, "xai-token")
+
+    assert credentials == ("xai-token", "xai-token-2", "xai-token-3")
+
+
+def test_provider_credentials_dedupes_repeated_keys() -> None:
+    descriptor = PROVIDER_CATALOG["xai"]
+    settings = _make_settings(
+        provider_api_keys={"xai": ("xai-token", "xai-token-2")},
+    )
+
+    credentials = provider_credentials(descriptor, settings, "xai-token")
+
+    assert credentials == ("xai-token", "xai-token-2")
+
+
+def test_provider_credentials_ignores_extra_keys_for_other_providers() -> None:
+    descriptor = PROVIDER_CATALOG["xai"]
+    settings = _make_settings(provider_api_keys={"groq": ("gsk-key-2",)})
+
+    credentials = provider_credentials(descriptor, settings, "xai-token")
+
+    assert credentials == ("xai-token",)
+
+
+def test_provider_credentials_never_rotates_static_credential_providers() -> None:
+    descriptor = PROVIDER_CATALOG["lmstudio"]
+    settings = _make_settings(provider_api_keys={"lmstudio": ("unused",)})
+
+    credentials = provider_credentials(descriptor, settings, "lm-studio")
+
+    assert credentials == ()
+
+
+def test_build_provider_config_includes_configured_extra_keys() -> None:
+    descriptor = PROVIDER_CATALOG["xai"]
+    settings = _make_settings(
+        xai_api_key="xai-token",
+        provider_api_keys={"xai": ("xai-token-2",)},
+    )
+
+    config = build_provider_config(descriptor, settings)
+
+    assert config.api_key == "xai-token"
+    assert config.api_keys == ("xai-token", "xai-token-2")
+
+
+def test_multi_key_provider_wires_rotating_credential_provider() -> None:
+    settings = _make_settings(
+        xai_api_key="xai-token",
+        provider_api_keys={"xai": ("xai-token-2",)},
+    )
+
+    with patch(
+        "free_claude_code.providers.openai_chat.provider.AsyncOpenAI"
+    ) as async_openai:
+        provider = create_provider("xai", settings)
+
+    assert isinstance(provider, OpenAIChatProvider)
+    rotator = provider._key_rotator
+    assert rotator is not None
+    _, kwargs = async_openai.call_args
+    assert kwargs["api_key"] == rotator.next_key
+    assert asyncio.run(rotator.next_key()) == "xai-token"
+    assert asyncio.run(rotator.next_key()) == "xai-token-2"
+    assert asyncio.run(rotator.next_key()) == "xai-token"
+
+
+def test_single_key_provider_does_not_wire_rotation() -> None:
+    settings = _make_settings(xai_api_key="xai-token")
+
+    with patch(
+        "free_claude_code.providers.openai_chat.provider.AsyncOpenAI"
+    ) as async_openai:
+        provider = create_provider("xai", settings)
+
+    assert isinstance(provider, OpenAIChatProvider)
+    _, kwargs = async_openai.call_args
+    assert kwargs["api_key"] == "xai-token"
+    assert provider._key_rotator is None
 
 
 def test_qwencloud_provider_config_uses_key_base_and_proxy() -> None:

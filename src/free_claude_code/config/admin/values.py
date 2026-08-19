@@ -1,5 +1,6 @@
 """Admin config value state and API response assembly."""
 
+import json
 import os
 from enum import Enum
 
@@ -25,8 +26,10 @@ def normalize_for_env(value: object) -> str | None:
         return "true" if value else "false"
     if isinstance(value, Enum):
         return str(value.value)
+    if isinstance(value, dict):
+        return json.dumps(value) if value else None
     if isinstance(value, tuple) and all(isinstance(item, str) for item in value):
-        return ",".join(value)
+        return ",".join(value) if value else None
     return str(value).strip()
 
 

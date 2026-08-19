@@ -44,11 +44,20 @@ def resolve_provider(
     return provider
 
 
+def _accepted_tokens(settings: Settings) -> tuple[str, ...]:
+    """Return every token that authenticates a proxy request."""
+    return (settings.proxy_auth_token, *settings.public_api_keys)
+
+
 def require_proxy_auth(
     request: Request,
     settings: Settings = Depends(get_settings),
 ) -> None:
-    """Require the configured proxy token as HTTP bearer authorization."""
+    """Require the configured proxy token as HTTP bearer authorization.
+
+    Any one of the retained ``proxy_auth_token`` or the configured
+    ``public_api_keys`` authenticates a request.
+    """
     if not settings.proxy_auth_enabled:
         return
 
@@ -67,9 +76,10 @@ def require_proxy_auth(
         )
     token = parts[1].strip()
 
-    if not token or not secrets.compare_digest(
-        token.encode("utf-8"),
-        settings.proxy_auth_token.encode("utf-8"),
+    token_bytes = token.encode("utf-8")
+    if not token or not any(
+        secrets.compare_digest(token_bytes, accepted.encode("utf-8"))
+        for accepted in _accepted_tokens(settings)
     ):
         raise HTTPException(
             status_code=401,

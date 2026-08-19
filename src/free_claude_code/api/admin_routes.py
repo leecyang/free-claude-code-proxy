@@ -18,6 +18,7 @@ from free_claude_code.application.model_metadata import ProviderModelRefreshResu
 from free_claude_code.config.admin.manifest import FIELD_BY_KEY
 from free_claude_code.config.admin.persistence import validate_updates
 from free_claude_code.config.admin.values import load_config_response, load_value_state
+from free_claude_code.config.loader import get_settings
 from free_claude_code.config.model_refs import configured_chat_model_refs
 from free_claude_code.config.provider_catalog import (
     PROVIDER_CATALOG,
@@ -76,11 +77,19 @@ def require_loopback_admin(request: Request) -> None:
     """Allow admin access only from the local machine."""
 
     client_host = request.client.host if request.client else None
-    if not _is_loopback_host(client_host):
+    if _is_loopback_host(client_host):
+        trusted_client = True
+    else:
+        trusted_client = client_host in get_settings().admin_trusted_client_ips
+    if not trusted_client:
         raise HTTPException(status_code=403, detail="Admin UI is local-only")
 
     origin = request.headers.get("origin")
     if not _origin_is_local(origin):
+        raise HTTPException(status_code=403, detail="Admin UI is local-only")
+    if not _is_loopback_host(client_host) and not _is_loopback_host(
+        request.url.hostname
+    ):
         raise HTTPException(status_code=403, detail="Admin UI is local-only")
 
 

@@ -14,6 +14,7 @@ from free_claude_code.config.env_migrations import (
     OPENCODE_ZEN_MODEL_REF_MIGRATIONS,
     consolidate_managed_config,
     migrate_env_setting_in_text,
+    render_managed_config,
 )
 from free_claude_code.config.loader import resolve_settings_snapshot
 
@@ -44,6 +45,21 @@ def test_pure_key_and_value_migrations_remain_available() -> None:
     )
     assert changed is True
     assert migrated == "MODEL=opencode_zen/model\n"
+
+
+def test_multi_api_keys_are_masked_in_env_preview() -> None:
+    rendered = render_managed_config(
+        {
+            "PUBLIC_API_KEYS": "fcc_secret_1,fcc_secret_2",
+            "PROVIDER_API_KEYS": '{"groq":["gsk_secret"]}',
+        },
+        mask_secrets=True,
+    )
+
+    assert "fcc_secret_1" not in rendered
+    assert "fcc_secret_2" not in rendered
+    assert "gsk_secret" not in rendered
+    assert rendered.count("********") == 2
 
 
 def test_fresh_install_writes_only_schema_metadata(

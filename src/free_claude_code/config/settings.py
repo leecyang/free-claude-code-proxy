@@ -1,5 +1,7 @@
 """Pure, validated application settings schema."""
 
+import ipaddress
+import json
 from typing import Annotated
 
 from pydantic import (
@@ -41,6 +43,51 @@ def _parse_model_fallbacks(value: object) -> object:
     return value
 
 
+def _parse_csv_keys(value: object) -> object:
+    """Parse a comma-separated list of tokens into a tuple, dropping blanks."""
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return tuple(part.strip() for part in value.split(",") if part.strip())
+    if isinstance(value, list | tuple):
+        return tuple(str(part).strip() for part in value if str(part).strip())
+    return value
+
+
+def _parse_provider_api_keys(value: object) -> object:
+    """Parse ``PROVIDER_API_KEYS`` into ``{provider_id: (key, ...)}``.
+
+    Accepts a JSON object mapping provider id to a list of additional
+    upstream API keys, e.g. ``{"nvidia_nim": ["key1", "key2"]}``.
+    """
+    if value is None:
+        return {}
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return {}
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"PROVIDER_API_KEYS must be valid JSON: {exc}") from exc
+        value = parsed
+    if not isinstance(value, dict):
+        raise ValueError(
+            "PROVIDER_API_KEYS must be a JSON object mapping provider id to a "
+            "list of API keys."
+        )
+    normalized: dict[str, tuple[str, ...]] = {}
+    for provider_id, keys in value.items():
+        if not isinstance(keys, list | tuple):
+            raise ValueError(
+                f"PROVIDER_API_KEYS[{provider_id!r}] must be a list of strings."
+            )
+        cleaned = tuple(str(key).strip() for key in keys if str(key).strip())
+        if cleaned:
+            normalized[str(provider_id)] = cleaned
+    return normalized
+
+
 NonEmptyString = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=1),
@@ -52,6 +99,14 @@ OptionalNonEmptyString = Annotated[
 OptionalModelFallbacks = Annotated[
     tuple[NonEmptyString, ...] | None,
     BeforeValidator(_parse_model_fallbacks),
+]
+CsvKeys = Annotated[
+    tuple[NonEmptyString, ...],
+    BeforeValidator(_parse_csv_keys),
+]
+ProviderApiKeysMap = Annotated[
+    dict[str, tuple[NonEmptyString, ...]],
+    BeforeValidator(_parse_provider_api_keys),
 ]
 
 
@@ -677,6 +732,10 @@ class Settings(BaseModel):
     host: NonEmptyString = Field(default="0.0.0.0", validation_alias="HOST")
     port: int = Field(default=8082, validation_alias="PORT")
     open_admin_browser: bool = Field(default=True, validation_alias="FCC_OPEN_BROWSER")
+    admin_trusted_client_ips: CsvKeys = Field(
+        default=(),
+        validation_alias="FCC_ADMIN_TRUSTED_CLIENT_IPS",
+    )
     proxy_auth_enabled: bool = Field(
         default=False,
         validation_alias="PROXY_AUTH_ENABLED",
@@ -685,6 +744,23 @@ class Settings(BaseModel):
         default="freecc",
         validation_alias="ANTHROPIC_AUTH_TOKEN",
     )
+    # Additional downstream/public API keys accepted alongside ``proxy_auth_token``.
+    # Any one of them authenticates a client; comma-separated, e.g.
+    # PUBLIC_API_KEYS=fcc_test_1,fcc_test_2
+    public_api_keys: CsvKeys = Field(
+        default=(),
+        validation_alias="PUBLIC_API_KEYS",
+    )
+
+    # ==================== Multi-Key Provider Rotation ====================
+    # Extra upstream API keys per provider, used in round-robin alongside each
+    # provider's primary credential field (e.g. NVIDIA_NIM_API_KEY). JSON object
+    # mapping provider id to a list of keys, e.g.:
+    # PROVIDER_API_KEYS={"nvidia_nim": ["nvapi-key-2"], "groq": ["gsk-key-2"]}
+    provider_api_keys: ProviderApiKeysMap = Field(
+        default_factory=dict,
+        validation_alias="PROVIDER_API_KEYS",
+    )
 
     @field_validator("max_message_log_entries_per_chat", mode="before")
     @classmethod
@@ -692,6 +768,20 @@ class Settings(BaseModel):
         if v == "" or v is None:
             return None
         return v
+
+    @field_validator("admin_trusted_client_ips")
+    @classmethod
+    def validate_admin_trusted_client_ips(
+        cls, value: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        for address in value:
+            try:
+                ipaddress.ip_address(address)
+            except ValueError as exc:
+                raise ValueError(
+                    "FCC_ADMIN_TRUSTED_CLIENT_IPS must contain IP addresses"
+                ) from exc
+        return value
 
     @field_validator("log_level")
     @classmethod
@@ -776,6 +866,20 @@ class Settings(BaseModel):
         if len(validated) != len(set(validated)):
             raise ValueError("MODEL_FALLBACKS must not contain duplicate model refs.")
         return validated
+
+    @field_validator("provider_api_keys")
+    @classmethod
+    def validate_provider_api_keys(
+        cls, value: dict[str, tuple[str, ...]]
+    ) -> dict[str, tuple[str, ...]]:
+        unknown = sorted(set(value) - set(SUPPORTED_PROVIDER_IDS))
+        if unknown:
+            supported = ", ".join(f"'{item}'" for item in SUPPORTED_PROVIDER_IDS)
+            raise ValueError(
+                f"PROVIDER_API_KEYS has unknown provider id(s): {', '.join(unknown)}. "
+                f"Supported: {supported}"
+            )
+        return value
 
     @model_validator(mode="after")
     def check_nvidia_nim_api_key(self) -> Settings:

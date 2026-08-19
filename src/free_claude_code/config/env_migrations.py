@@ -167,7 +167,7 @@ def secret_env_keys() -> frozenset[str]:
     secret_attrs = {
         name
         for name in Settings.model_fields
-        if name.endswith(("_api_key", "_proxy", "_token"))
+        if name.endswith(("_api_key", "_api_keys", "_proxy", "_token"))
     }
     secret_attrs.update({"telegram_proxy_url", "proxy_auth_token"})
     return frozenset(

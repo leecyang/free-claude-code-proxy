@@ -15,7 +15,7 @@
 [![Code style: Ruff](https://img.shields.io/badge/code%20formatting-ruff-f5a623.svg?style=for-the-badge)](https://github.com/astral-sh/ruff)
 [![Logging: Loguru](https://img.shields.io/badge/logging-loguru-4ecdc4.svg?style=for-the-badge)](https://github.com/Delgan/loguru)
 
-[Quick Start](#quick-start) · [Providers](#choose-a-provider) · [Clients](#connect-your-client) · [Integrations](#optional-integrations) · [Manage](#manage-your-installation)
+[Quick Start](#quick-start) · [Providers](#choose-a-provider) · [Clients](#connect-your-client) · [Docker](#docker-compose-deployment) · [Integrations](#optional-integrations) · [Manage](#manage-your-installation)
 
 </div>
 
@@ -446,6 +446,70 @@ If the file does not exist, create it with a complete JSON object:
 Restart Claude Code or the IDE after saving the file.
 
 </details>
+
+## Docker Compose Deployment
+
+Run FCC as a self-hosted aggregation gateway: one base URL, multiple providers,
+multiple upstream keys per provider, and multiple public API keys for your
+agents — with the Admin UI still available.
+
+```bash
+cp .env.production.example .env
+# edit .env: provider keys, ANTHROPIC_AUTH_TOKEN, PUBLIC_API_KEYS
+docker compose up -d --build
+```
+
+The container binds `8082` to the host loopback interface for both the `/v1/*`
+API and the Admin UI (`http://localhost:8082/admin`), and provides a `GET
+/health` healthcheck. On first start, `.env` is imported as a read-only bootstrap
+file into FCC's managed config. It is not injected as process-owned environment,
+so its settings remain editable in Admin. Managed config and logs persist in the
+`fcc-data` volume (`/home/fcc/.fcc` in the container), so Admin UI edits survive
+restarts. Later edits to the host `.env` do not overwrite managed settings.
+
+Point your agent at the aggregated gateway:
+
+```text
+BASE_URL=http://localhost:8082
+API_KEY=<one of PUBLIC_API_KEYS, or ANTHROPIC_AUTH_TOKEN>
+```
+
+### Multiple upstream API keys per provider
+
+Each provider's existing single-key field (e.g. `NVIDIA_NIM_API_KEY`) keeps
+working unchanged. To add more keys for the same provider, set
+`PROVIDER_API_KEYS` to a JSON object mapping provider id to a list of
+additional keys — FCC round-robins across all configured keys (primary plus
+extras), retrying the next key on a retryable failure:
+
+```env
+NVIDIA_NIM_API_KEY=nvapi-key-1
+PROVIDER_API_KEYS={"nvidia_nim": ["nvapi-key-2", "nvapi-key-3"], "groq": ["gsk-key-2"]}
+```
+
+### Multiple public/downstream API keys
+
+`ANTHROPIC_AUTH_TOKEN` keeps working as the single retained token. To hand
+out separate keys per agent/tester, add `PUBLIC_API_KEYS` — any one of them,
+or the retained token, authenticates a request via
+`Authorization: Bearer <key>`:
+
+```env
+PROXY_AUTH_ENABLED=true
+ANTHROPIC_AUTH_TOKEN=freecc
+PUBLIC_API_KEYS=fcc_test_1,fcc_test_2,fcc_test_3
+```
+
+An invalid key returns `401`. `/health` stays unauthenticated.
+
+Both `PROVIDER_API_KEYS` and `PUBLIC_API_KEYS`/`ANTHROPIC_AUTH_TOKEN` are also
+editable from the Admin UI (**Providers** and **Runtime** sections); secret
+values are masked in the UI.
+
+The Compose deployment intentionally is not reachable beyond the Docker host.
+If remote agents need the API, put FCC behind a TLS reverse proxy that exposes
+only `/v1/*` and `/health`; keep `/admin*` restricted to localhost or an SSH
+tunnel.
 
 <a id="optional-integrations"></a>
 

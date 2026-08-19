@@ -25,6 +25,10 @@ class ProviderConfig:
     """
 
     api_key: str | None
+    # All configured upstream API keys for this provider, in rotation order.
+    # Contains ``api_key`` as its first element when set. Empty when the
+    # provider has no key-based credential (e.g. Vertex ADC, local runtimes).
+    api_keys: tuple[str, ...]
     base_url: str
     rate_limit: int
     rate_window: int

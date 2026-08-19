@@ -49,6 +49,7 @@ from free_claude_code.providers.http import (
     close_provider_stream,
     maybe_await_aclose,
 )
+from free_claude_code.providers.key_rotation import KeyRotator
 from free_claude_code.providers.model_listing import (
     extract_openai_model_infos,
     merge_model_list_pages,
@@ -152,6 +153,10 @@ class OpenAIChatProvider(BaseProvider):
                 f"{profile.provider_name} requires an API key or credential provider"
             )
         self._api_key = config.api_key
+        self._key_rotator: KeyRotator | None = None
+        if api_key_provider is None and len(config.api_keys) > 1:
+            self._key_rotator = KeyRotator(config.api_keys)
+            api_key_provider = self._key_rotator.next_key
         self._base_url = profile.base_url(config.base_url).rstrip("/")
         # Learned per-model output-token caps from upstream 400 rejections, so
         # later requests clamp proactively instead of paying the 400 each time.
